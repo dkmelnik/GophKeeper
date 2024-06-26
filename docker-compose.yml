@@ -1,0 +1,87 @@
+services:
+  server:
+    container_name: keeper_server
+    build:
+      context: app
+      dockerfile: docker/Dockerfile-server
+      target: production
+    environment:
+      - TZ=Europe/Moscow
+      - SERVER_MONGO_DSN=mongodb://web:web@mongo:27017
+      - SERVER_ADDR=0.0.0.0:1234
+      - SERVER_SECRET=secret
+      - SERVER_EXP=5
+      - SERVER_MONGO_DB=local
+    ports:
+      - "18080:18080"
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    volumes:
+      - "./app/migrations:/app/migrations"
+    networks:
+      - keeper-network
+
+  client:
+    container_name: keeper_client
+    build:
+      context: app
+      dockerfile: docker/Dockerfile-client
+      target: production
+    environment:
+      - TZ=Europe/Moscow
+    networks:
+      - keeper-network
+
+  mongo:
+    image: mongo:latest
+    container_name: keeper_mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: web
+      MONGO_INITDB_ROOT_PASSWORD: web
+      MONGO_INITDB_DATABASE: local
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - keeper-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prom/prometheus:/etc/prometheus
+    container_name: keeper_prom
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    environment:
+      TZ: "Europe/Moscow"
+    networks:
+      - keeper-network
+
+  grafana:
+    image: grafana/grafana:latest
+    user: root
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    container_name: keeper_graf
+    volumes:
+      - ./prom/grafana:/var/lib/grafana
+      - ./prom/grafana/provisioning/:/etc/grafana/provisioning/
+    environment:
+      TZ: "Europe/Moscow"
+    networks:
+      - keeper-network
+
+
+networks:
+  keeper-network:
+    driver: bridge
+
+
+volumes:
+  mongo_data:
